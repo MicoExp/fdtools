@@ -13,7 +13,7 @@
 script_name('FDTools')
 script_author('Mico')
 script_description('Удобный помощник для FullDostup-a')
-script_version('3.6.1')
+script_version('3.7.1')
 
 require('moonloader')
 require('sampfuncs')
