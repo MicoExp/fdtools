@@ -32,6 +32,7 @@ local fa_glyph_ranges   = imgui.ImGlyphRanges({ fa.min_range, fa.max_range })
 local sw, sh            = getScreenResolution()
 local main_window       = imgui.ImBool(false)
 local main_give           = imgui.ImBool(false)
+local updates           = imgui.ImBool(false)
 local prefix_id         = imgui.ImBuffer(256)
 local cmdid         = imgui.ImBuffer(256)
 local prefix_name         = imgui.ImBuffer(256)
@@ -170,15 +171,15 @@ function main()
 	while not isSampAvailable() do wait(100) end
     autoupdate("https://raw.githubusercontent.com/MicoExp/fdtools/main/tools.json", '['..string.upper(thisScript().name)..']: ', "")
 
-    allcmd()
+    sampRegisterChatCommand('givecmd', fullcmd)
     style()
     sampRegisterChatCommand('fdtools', cmdfd)
     sampAddChatMessage(tag..'{FFFFFF}Активация помощника: {1E90FF}/fdtools', main_color)
     sampRegisterChatCommand('fdgive', givefd)
 
     while true do
-        imgui.ShowCursor = main_window.v or main_give.v
-        imgui.Process = main_window.v or main_give.v
+        imgui.ShowCursor = main_window.v or main_give.v or updates.v
+        imgui.Process = main_window.v or main_give.v or updates.v
         wait(0)
         _, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
 		nick = sampGetPlayerNickname(id)
@@ -188,6 +189,11 @@ function main()
             imgui.ShowCursor = false
         end
         if main_give.v == false then
+            imgui.Process = false
+            imgui.ShowCursor = false
+        end
+
+        if updates.v == false then
             imgui.Process = false
             imgui.ShowCursor = false
         end
@@ -292,33 +298,33 @@ function hook.onShowDialog(dialogId, style, title, button1, button2, text)
 	end
 end
 
-function allcmd()
-    sampRegisterChatCommand('givefull', function()
-        sampAddChatMessage("/setcmd "..nick.." /makeadmin 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /makeleader 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /offleader 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /makehelper 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /offhelper 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /ghetto 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /gzcolor 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /avig 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /aunvig 1")
-		wait(1000)
-		sampAddChatMessage("/setcmd "..nick.." /banip 1")
-		wait(1000)
-		sampAddChatMessage("/setstat "..id.." 36 1")
-		wait(1000)
-		sampAddChatMessage("/setstat "..id.." 37 1")
-		wait(1000)
-		sampAddChatMessage(tag.."{FFFFFF}вам были выданы все команды!", main_color)
+function fullcmd()
+    lua_thread.create(function()
+        sampSendChat("/setcmd "..nick.." /makeadmin 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /makeleader 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /offleader 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /makehelper 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /offhelper 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /ghetto 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /gzcolor 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /avig 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /aunvig 1")
+        wait(1000)
+        sampSendChat("/setcmd "..nick.." /banip 1")
+        wait(1000)
+        sampSendChat("/setstat "..id.." 36 1")
+        wait(1000)
+        sampSendChat("/setstat "..id.." 37 1")
+        wait(1000)
+        sampAddChatMessage(tag.."{FFFFFF}вам были выданы все команды!", main_color)
     end)
 end
 function string.split(inputstr, sep)
@@ -502,7 +508,7 @@ function imgui.OnDrawFrame( ... )
         imgui.PopFont()
         imgui.SameLine()
         imgui.SetCursorPosY(25)
-        imgui.Hint(u8'{313742}v3.5', u8'Обновление (351), от 25.09')
+        imgui.Hint(u8'{313742}v3.6', u8'Обновление (364), от 27.09')
         imgui.SameLine()
         imgui.SetCursorPosY(10)
         imgui.SetCursorPosX(485)
@@ -520,7 +526,7 @@ function imgui.OnDrawFrame( ... )
             imgui.PopFont()
             imgui.PushFont(font_12)
             imgui.Text(u8'Команды скрипта:\n')
-            imgui.Text(u8'/fdtools - Главное меню скрипта\n/fdgive [ID] - Меню быстрой выдачи\n\n')
+            imgui.Text(u8'/fdtools - Главное меню скрипта\n/fdgive [ID] - Меню быстрой выдачи\n/givecmd - Выдать все команды себе\n\n')
             imgui.Text(u8'Горячие клавиши:')
             imgui.Text(ini.config.hotkey.. u8' - Главное меню')
             if imgui.ClosePopupButton(u8'Закрыть', imgui.ImVec2(450,30)) then
@@ -645,10 +651,16 @@ function imgui.OnDrawFrame( ... )
                     imgui.PopFont()
                 end
                 if user == 3 then
-                    imgui.SetCursorPosY(11)
+                --[[    imgui.SetCursorPosY(11)
                     imgui.PushFont(font_16)
                     imgui.CenterText(u8'Информация')
                     imgui.PopFont()
+                    imgui.PushFont(font_14)
+                    imgui.SetCursorPosX(11)
+                    imgui.Text(u8'Помощник Основателя')
+                    imgui.PopFont()
+                    imgui.SetCursorPosX(11)
+                    imgui.GrayText(u8'/astats [nick], /setstat [id], /setcmd [nick]') --]]
                 end
             imgui.EndChild()
         end
@@ -1706,6 +1718,22 @@ function imgui.OnDrawFrame( ... )
                 end
         imgui.End()
     end
+    if updates.v then
+	    imgui.SetNextWindowSize(imgui.ImVec2(0,0), imgui.Cond.FirstUseEver)
+	    imgui.SetNextWindowPos(imgui.ImVec2((sw / 2), sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
+        imgui.Begin(u8'udatess', updates, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.ShowBorders + imgui.WindowFlags.AlwaysUseWindowPadding)
+        imgui.PushFont(fontsize35)
+        imgui.TextColoredRGB(u8'{D6D6D6}Версия: '..thisScript().version)
+        imgui.PopFont()
+        imgui.Text('')
+        imgui.Text(u8'Исправление ошибок и добавлены новые')
+        imgui.Text(u8'Добавлено автообновление')
+        imgui.Text(u8'Добавлена команда /givecmd - выдать себе все команды')
+        if imgui.ClosePopupButton(u8'Закрыть', imgui.ImVec2(450,30)) then
+            updates.v = false
+        end
+        imgui.End()
+    end
 end
 
 
@@ -2126,7 +2154,7 @@ function style()
 
     if ini.config.theme == 1 or ini.config.theme == nil then
         colors[clr.Text] = ImVec4(1.00, 1.00, 1.00, 1.00)
-        colors[clr.TextDisabled] = ImVec4(1.815, 1.388, 1.051, 0.500)
+        colors[clr.TextDisabled] = ImVec4(1.815, 1.388, 1.051, 0.000)
         colors[clr.WindowBg] = ImVec4(0.06, 0.05, 0.07, 0.93)
         colors[clr.ChildWindowBg] = ImVec4(0.07, 0.07, 0.09, 1.00)
         colors[clr.PopupBg] = ImVec4(0.07, 0.07, 0.09, 1.00)
@@ -2363,6 +2391,7 @@ function autoupdate(json_url, prefix, url)
                       elseif status1 == dlstatus.STATUS_ENDDOWNLOADDATA then
                         print('Загрузка обновления завершена.')
                         sampAddChatMessage((prefix..'Обновление завершено!'), color)
+                        updates.v = true
                         goupdatestatus = true
                         lua_thread.create(function() wait(500) thisScript():reload() end)
                       end
