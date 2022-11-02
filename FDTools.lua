@@ -13,7 +13,7 @@
 script_name('FDTools')
 script_author('Mico')
 script_description('Удобный помощник для FullDostup-a')
-script_version('3.7.1')
+script_version('4.0.0')
 
 require('moonloader')
 require('sampfuncs')
@@ -26,18 +26,20 @@ local vkeys             = require 'vkeys'
 local rkeys             = require 'rkeys'
 local fa                = require 'fAwesome5'
 local memory            = require 'memory'
-local hook = require("lib.samp.events")
-local bNotf, notf       = pcall(import, "imgui_notf.lua")
+local hook              = require("lib.samp.events")
 local fa_glyph_ranges   = imgui.ImGlyphRanges({ fa.min_range, fa.max_range })
 local sw, sh            = getScreenResolution()
 local main_window       = imgui.ImBool(false)
 local main_give           = imgui.ImBool(false)
+local astats_menu           = imgui.ImBool(false)
+
 local updates           = imgui.ImBool(false)
 local prefix_id         = imgui.ImBuffer(256)
 local cmdid         = imgui.ImBuffer(256)
 local prefix_name         = imgui.ImBuffer(256)
 local prefix         = imgui.ImBuffer(256)
 local promo_name        = imgui.ImBuffer(256)
+local name_user        = imgui.ImBuffer(256)
 local id_give_stat        = imgui.ImBuffer(256)
 local statscol        = imgui.ImBuffer(256)
 local combo_prefix_mafia      = imgui.ImInt(0)
@@ -55,9 +57,13 @@ local combo_cmd             = imgui.ImInt(0)
 local id_stats              = imgui.ImBuffer(256)
 local number_s              = imgui.ImBuffer(256)
 local combo_stats      = imgui.ImInt(1)
-local main_color = 0x1E90FF
-local tag = "{1E90FF}>> [FDHelper] "
-
+local main_color = 0x90EE90
+local tag = "{90EE90}>> [ФД Хэлпер] "
+local module = {}
+module._VERSION = "1.0.0"
+module._SETTINGS = {
+    noKeysMessage = "No"
+}
 local ini = inicfg.load({
     config = {
         theme = 1,
@@ -153,6 +159,10 @@ local vedprefix = {
     u8'Технический Администратор'
 }
 
+local god = {'января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'}
+local afr = {[0] = 'Нет', 'Полиция ЛС', 'ФСБ', 'Армия Сан-Фиеро', 'Городская больница', 'La Cosa Nostra', 'Yakuza', 'Мэрия', 'Закрыто', 'Закрыто', 'Полиция СФ', 'Инструкторы', 'The Ballas', 'Vagos', 'Русская Мафия', 'Grove Street', 'Радиоцентр', 'Aztecas', 'The Rifa', 'Армия Лас-Вентурас', 'Закрыто', 'Полиция ЛВ', 'Закрыто', 'Хитманы', 'Стритрейсеры', 'ОМОН', 'Администрация Президента', 'Казино «4 дракона»', 'Казино «Калигула»'}
+local leas = {[0] = '', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', 'Закрыто', 'Закрыто', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', 'Закрыто', '(Лидер)', 'Закрыто', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)', '(Лидер)'}
+
 local rukprefix = {
     u8'Помощник Основателя',
     u8'Заместитель Основателя',
@@ -174,12 +184,13 @@ function main()
     sampRegisterChatCommand('givecmd', fullcmd)
     style()
     sampRegisterChatCommand('fdtools', cmdfd)
-    sampAddChatMessage(tag..'{FFFFFF}Активация помощника: {1E90FF}/fdtools', main_color)
+    sampAddChatMessage(tag..'{FFFFFF}скрипт успешно загружен, для активациия используйте: {90EE90}/fdtools', main_color)
     sampRegisterChatCommand('fdgive', givefd)
+    sampRegisterChatCommand('stats', commnad_stats)
 
     while true do
-        imgui.ShowCursor = main_window.v or main_give.v or updates.v
-        imgui.Process = main_window.v or main_give.v or updates.v
+        imgui.ShowCursor = main_window.v or main_give.v or updates.v or astats_menu.v  
+        imgui.Process = main_window.v or main_give.v or updates.v or astats_menu.v 
         wait(0)
         _, id = sampGetPlayerIdByCharHandle(PLAYER_PED)
 		nick = sampGetPlayerNickname(id)
@@ -241,9 +252,23 @@ function isKeysDown(keylist, pressed)
 	end
 	return bool
 end
+
+function hook.onServerMessage(color, text)
+    lua_thread.create(function()
+        if text:find("{FFFF00}| {FFFFFF}Такой игрок не зарегестрирован на сервере") then
+            astats = 2
+        end   
+    end)
+end
+
 function hook.onShowDialog(dialogId, style, title, button1, button2, text)
 	if parsim and dialogId == 228 and title:find("Статистика администратора") then -- как и говорил, хер знает почему, но половина диалогов на РРП с идом 228, по-этому делаем дополнительную через тайтл
 		for line in text:gmatch("[^\r\n]+") do -- парсим каждую строку
+			if line:find("%{FFFFFF%}Имя:%s+%{dfb519%}%w+_%w+") then -- проверяем строку на нужный нам текст
+				a_nick = line:match("%{FFFFFF%}Имя:%s+%{dfb519%}(%w+_%w+)") -- всю эту бадулу выводим в переменную, чтобы потом использовать можно было её
+			end
+		end
+        for line in text:gmatch("[^\r\n]+") do -- парсим каждую строку
 			if line:find("%{FFFFFF%}Административный уровень:%s+%{dfb519%}%d+") then -- проверяем строку на нужный нам текст
 				adm_level = line:match("%{FFFFFF%}Административный уровень:%s+%{dfb519%}(%d+)") -- всю эту бадулу выводим в переменную, чтобы потом использовать можно было её
 			end
@@ -294,9 +319,29 @@ function hook.onShowDialog(dialogId, style, title, button1, button2, text)
 			end
 		end
 		parsim = false
-		return false -- не показываем этот самый диалог пользователю, ибо нахер он ему нужен
+		return false
 	end
+    if parsim and dialogId == 1932 and title:find("Оффлайн статистика") then
+        for line in text:gmatch("[^\r\n]+") do
+            if line:find("Послед. вход%: %[%d+%/%d+%/%d+ %d+%:%d+%]") then
+                lc_d, lc_m, lc_y, lc_h, lc_min = line:match("Послед. вход%: %[(%d+)%/(%d+)%/(%d+) (%d+)%:(%d+)%]")
+            end
+        end
+        for line in text:gmatch("[^\r\n]+") do
+            if line:find("Организация%: %[%d+%]") then
+                frac = line:match("Организация%: %[(%d+)%]")
+            end
+        end
+        for line in text:gmatch("[^\r\n]+") do
+            if line:find("Лидер%: %[%d+%]") then
+                leader = line:match("Лидер%: %[(%d+)%]")
+            end
+        end
+        parsim = false
+        return false
+    end
 end
+
 
 function fullcmd()
     lua_thread.create(function()
@@ -327,6 +372,7 @@ function fullcmd()
         sampAddChatMessage(tag.."{FFFFFF}вам были выданы все команды!", main_color)
     end)
 end
+
 function string.split(inputstr, sep)
 	if sep == nil then
 		sep = '%s'
@@ -420,12 +466,28 @@ function imgui.HotKey(name, path, pointer, defaultKey, width)
 	imgui.PopStyleColor(3)
 	return bool
 end
+
 function cmdfd(args)
     lua_thread.create(function()
         sampSendChat("/astats") -- отправляем серверу /astats
         parsim = true
         wait(1)
         main_window.v = true
+    end)
+end
+
+function commnad_stats(args_astats)
+    lua_thread.create(function()
+        astats_menu.v = true
+        astats = 0
+        timerStart = os.time()
+        timerEndTime = 3
+        wait(1000)
+        sampSendChat("/getoffstats "..args_astats) -- отправляем серверу /astats
+        parsim = true
+        wait(1000)
+        sampSendChat("/astats "..args_astats) -- отправляем серверу /astats
+        parsim = true
     end)
 end
 
@@ -448,10 +510,9 @@ function imgui.GrayText(text)
 end
 
 function imgui.BlackGrayText(text)
-	imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.49, 0.55, 0.66, 0.780))
-		local text = imgui.Text(text)
-	imgui.PopStyleColor(1)
-	return text
+    imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(0.49, 0.55, 0.66, 0.780))
+    imgui.Text(text)
+    imgui.PopStyleColor(1)
 end
 
 local fontsize35 = nil
@@ -497,7 +558,11 @@ function imgui.BeforeDrawFrame()
         fontsize15 = imgui.GetIO().Fonts:AddFontFromFileTTF(getFolderPath(0x14).. '\\trebucbd.ttf', 25.0, nil, imgui.GetIO().Fonts:GetGlyphRangesCyrillic()) -- вместо 30 любой нужный размер
     end
 end
-
+function FormatTime(time)
+    local timezone_offset = 86400 - os.date('%H', 0) * 3600
+    local time = time + timezone_offset
+    return os.date((os.date("%H",time) == "00" and '%M:%S' or '%H:%M:%S'), time)
+end
 function imgui.OnDrawFrame( ... )
     if main_window.v then
 	    imgui.SetNextWindowSize(imgui.ImVec2(570,305), imgui.Cond.FirstUseEver)
@@ -508,7 +573,7 @@ function imgui.OnDrawFrame( ... )
         imgui.PopFont()
         imgui.SameLine()
         imgui.SetCursorPosY(25)
-        imgui.Hint(u8'{313742}v3.6', u8'Обновление (364), от 27.09')
+        imgui.Hint(u8'{313742}v4.0', u8'Обновление (400), от 2.11')
         imgui.SameLine()
         imgui.SetCursorPosY(10)
         imgui.SetCursorPosX(485)
@@ -526,7 +591,7 @@ function imgui.OnDrawFrame( ... )
             imgui.PopFont()
             imgui.PushFont(font_12)
             imgui.Text(u8'Команды скрипта:\n')
-            imgui.Text(u8'/fdtools - Главное меню скрипта\n/fdgive [ID] - Меню быстрой выдачи\n/givecmd - Выдать все команды себе\n\n')
+            imgui.Text(u8'/fdtools - Главное меню скрипта\n/fdgive [ID] - Меню быстрой выдачи\n/givecmd - Выдать все команды себе\n/stats [nick] - Статистика игрока (getoffstats и astats)\n')
             imgui.Text(u8'Горячие клавиши:')
             imgui.Text(ini.config.hotkey.. u8' - Главное меню')
             if imgui.ClosePopupButton(u8'Закрыть', imgui.ImVec2(450,30)) then
@@ -583,8 +648,8 @@ function imgui.OnDrawFrame( ... )
             if imgui.MenuButton(fa.ICON_FA_USER_CIRCLE..u8' Профиль', imgui.ImVec2(150,30)) then
                 user = 1
             end
-            if imgui.MenuButton(fa.ICON_FA_INFO_CIRCLE..u8' Информация', imgui.ImVec2(150,30)) then
-                user = 3
+            if imgui.MenuNoAButton(fa.ICON_FA_INFO_CIRCLE..u8' Информация', imgui.ImVec2(150,30)) then
+           --     user = 3
             end
             if imgui.MenuNoAButton(fa.ICON_FA_LEVEL_UP_ALT..u8' Уровень доступа', imgui.ImVec2(150,30)) then
             --    user = 2
@@ -859,11 +924,10 @@ function imgui.OnDrawFrame( ... )
                     imgui.PopItemWidth()
                     imgui.SetCursorPosX(11)
                     if imgui.GreenButton(u8'Создать промокод', imgui.ImVec2(180, 30)) then
-                        sampSendChat('/newpromo #'..promo_name.v..' '..rub.v..' '..use.v..' '..combo_permission.v..' '..time.v)
+                        sampSendChat('/newpromo #'..u8:decode(promo_name.v)..' '..rub.v..' '..use.v..' '..combo_permission.v..' '..time.v)
                     end
                 end
             imgui.EndChild()
-            
         end
         if menu == 3 then
             imgui.SetCursorPosY(54)
@@ -886,8 +950,8 @@ function imgui.OnDrawFrame( ... )
             if imgui.MenuButton(fa.ICON_FA_USER_CIRCLE..u8' Дополнительно', imgui.ImVec2(150,30)) then
                 set = 3
             end
-            if imgui.MenuNoAButton(fa.ICON_FA_USER_CIRCLE..u8' Профиль', imgui.ImVec2(150,30)) then
-           --     set = 2
+            if imgui.MenuButton(fa.ICON_FA_BULLHORN..u8' Изменения', imgui.ImVec2(150,30)) then
+               set = 2
             end
             if imgui.MenuNoAButton(fa.ICON_FA_LOCK..u8' Скоро', imgui.ImVec2(150,30)) then
             end
@@ -930,17 +994,18 @@ function imgui.OnDrawFrame( ... )
                         style()
                     end
                     imgui.SetCursorPosX(11)
-                    imgui.PushFont(font_14)
-                    imgui.Text(u8'Дополнительно')
-                    imgui.PopFont()
-                    imgui.SetCursorPosX(19)
-
                 end
                 if set == 2 then
                     imgui.SetCursorPosY(11)
-                    imgui.PushFont(font_16)
-                    imgui.CenterText(u8'Настройки профиля')
+                    imgui.PushFont(font_14)
+                    imgui.Text(u8'Версия 4.0 (400)')
                     imgui.PopFont()
+                    imgui.SetCursorPosX(11)
+                    imgui.GrayText(u8'— Добавлено окно просмотра статистики игрока (/stats nick)')
+                    imgui.SetCursorPosX(11)
+                    imgui.GrayText(u8'— Внутренние изменения в статистике администратора')
+                    imgui.SetCursorPosX(11)
+                    imgui.GrayText(u8'— Различные исправления и улучшения')
                 end
                 if set == 3 then
                     imgui.SetCursorPosY(11)
@@ -966,7 +1031,7 @@ function imgui.OnDrawFrame( ... )
         imgui.PopFont()
         imgui.SameLine()
         imgui.SetCursorPosY(25)
-        imgui.Hint(u8'{313742}v3.5', u8'Обновление (351), от 25.09')
+        imgui.Hint(u8'{313742}v4.0', u8'Обновление (400), от 2.11')
         imgui.SameLine()
         imgui.SetCursorPosY(10)
         imgui.SetCursorPosX(545)
@@ -1001,9 +1066,14 @@ function imgui.OnDrawFrame( ... )
         if imgui.ClosePopupButton(u8'Без должности', imgui.ImVec2(188,30)) then
             menu_give = 6
         end
-        if imgui.ClosePopupButton(u8'Очистка должности', imgui.ImVec2(188,30)) then
-            sampAddChatMessage(tag..'{FFFFFF}недоступно!', main_color)
+        imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(0.0, 0.0, 0.0, 0.0))
+        if imgui.RedButton(u8'Очистка должности', imgui.ImVec2(188,30)) then
+            sampSendChat('/prefix '..playerId..' 0')
         end
+        playerNick = sampGetPlayerNickname(playerId)
+        imgui.Text(u8'Будет выдано:')
+        imgui.GrayText(playerNick..' ['..playerId..']')
+        imgui.PopStyleColor(1)
             if menu_give == 1 or menu_give == nil then
                 imgui.SetCursorPosY(45)
                 imgui.Text(u8'\n>> Государственные структуры\n')
@@ -1015,7 +1085,7 @@ function imgui.OnDrawFrame( ... )
                 imgui.CenterText(u8'Помощник Главного следящего')
                 imgui.PopFont()
                 if imgui.ClosePopupButton(u8'Выдать префикс##sssss', imgui.ImVec2(140,30)) then
-                    sampSendChatMessage('/prefix '..playerId..' Goss | Помощник ГС')
+                    sampSendChat('/prefix '..playerId..' Goss | Помощник ГС')
                 end
                 imgui.SameLine()
                 imgui.GrayText(u8'<< можно выдать только префикс')
@@ -1023,64 +1093,56 @@ function imgui.OnDrawFrame( ... )
                 imgui.CenterText(u8'\nЗаместитель Главного следящего')
                 imgui.PopFont()
                 if imgui.ClosePopupButton(u8'Префикс##Sdsfds', imgui.ImVec2(74,30)) then
-                    sampSendChatMessage('/prefix '..playerId..' Goss | Заместитель ГС')
+                    sampSendChat('/prefix '..playerId..' Goss | Заместитель ГС')
                 end
                 imgui.SameLine()
                 if imgui.ClosePopupButton(u8'Команды##lpdkf', imgui.ImVec2(74,30)) then
                     lua_thread.create(function()
-                        sampSendChatMessage('/setstat '..playerId..' 36 1')
+                        sampSendChat('/setstat '..playerId..' 37 1')
                         wait(1000)
-                        sampSendChatMessage('/setstat '..playerId..' 37 1')
-                        wait(1000)
-                        sampSendChatMessage('/setcmd '..nickname..' /makeleader 1')
+                        sampSendChat('/setcmd '..nickname..' /makeleader 1')
                     end)
                 end
                 imgui.SameLine()
                 if imgui.ClosePopupButton(u8'Выдать всё##lasklkp', imgui.ImVec2(191,30)) then
                     lua_thread.create(function()
-                        sampSendChatMessage('/prefix '..playerId..' Goss | Заместитель ГС')
+                        sampSendChat('/prefix '..playerId..' Goss | Заместитель ГС')
                         wait(1000)
-                        sampSendChatMessage('/setstat '..playerId..' 36 1')
+                        sampSendChat('/setstat '..playerId..' 37 1')
                         wait(1000)
-                        sampSendChatMessage('/setstat '..playerId..' 37 1')
-                        wait(1000)
-                        sampSendChatMessage('/setcmd '..nickname..' /makeleader 1')
+                        sampSendChat('/setcmd '..nickname..' /makeleader 1')
                     end)
                 end
                 imgui.PushFont(font_16)
                 imgui.CenterText(u8'\nГлавный следящий')
                 imgui.PopFont()
                 if imgui.ClosePopupButton(u8'Префикс##kalksjdhbhbsd', imgui.ImVec2(74,30)) then
-                    sampSendChatMessage('/prefix '..playerId..' Goss | Главный Следящий')
+                    sampSendChat('/prefix '..playerId..' Goss | Главный Следящий')
                 end
                 imgui.SameLine()
                 if imgui.ClosePopupButton(u8'Команды##jakskabsubias', imgui.ImVec2(74,30)) then
                     lua_thread.create(function()
-                        sampSendChatMessage('/setstat '..playerId..' 36 1')
+                        sampSendChat('/setstat '..playerId..' 37 1')
                         wait(1000)
-                        sampSendChatMessage('/setstat '..playerId..' 37 1')
+                        sampSendChat('/setcmd '..nickname..' /makeleader 1')
                         wait(1000)
-                        sampSendChatMessage('/setcmd '..nickname..' /makeleader 1')
-                        wait(1000)
-                        sampSendChatMessage('/setcmd '..nickname..' /offleader 1')
+                        sampSendChat('/setcmd '..nickname..' /offleader 1')
                     end)
                 end
                 imgui.SameLine()
                 if imgui.ClosePopupButton(u8'/offleader##sjjid', imgui.ImVec2(74,30)) then
-                    sampSendChatMessage('/setcmd '..nickname..' /offleader 1')
+                    sampSendChat('/setcmd '..nickname..' /offleader 1')
                 end
                 imgui.SameLine()
                 if imgui.ClosePopupButton(u8'Выдать всё##sdjisi', imgui.ImVec2(108,30)) then
                     lua_thread.create(function()
-                        sampSendChatMessage('/prefix '..playerId..' Goss | Главный Следящий')
+                        sampSendChat('/prefix '..playerId..' Goss | Главный Следящий')
                         wait(1000)
-                        sampSendChatMessage('/setstat '..playerId..' 36 1')
+                        sampSendChat('/setstat '..playerId..' 37 1')
                         wait(1000)
-                        sampSendChatMessage('/setstat '..playerId..' 37 1')
+                        sampSendChat('/setcmd '..nickname..' /makeleader 1')
                         wait(1000)
-                        sampSendChatMessage('/setcmd '..nickname..' /makeleader 1')
-                        wait(1000)
-                        sampSendChatMessage('/setcmd '..nickname..' /offleader 1')
+                        sampSendChat('/setcmd '..nickname..' /offleader 1')
                     end)
                 end
                 imgui.PopStyleColor(1)
@@ -1097,7 +1159,7 @@ function imgui.OnDrawFrame( ... )
                     imgui.CenterText(u8'Помощник Главного следящего')
                     imgui.PopFont()
                     if imgui.ClosePopupButton(u8'Выдать префикс##ojodijosijd', imgui.ImVec2(140,30)) then
-                        sampSendChatMessage('/prefix '..playerId..' Ghetto | Помощник ГС')
+                        sampSendChat('/prefix '..playerId..' Ghetto | Помощник ГС')
                     end
                     imgui.SameLine()
                     imgui.GrayText(u8'<< можно выдать только префикс')
@@ -1105,49 +1167,43 @@ function imgui.OnDrawFrame( ... )
                     imgui.CenterText(u8'\nЗаместитель Главного следящего')
                     imgui.PopFont()
                     if imgui.ClosePopupButton(u8'Префикс##kojsdiijisjd', imgui.ImVec2(74,30)) then
-                        sampSendChatMessage('/prefix '..playerId..' Ghetto | Заместитель ГС')
+                        sampSendChat('/prefix '..playerId..' Ghetto | Заместитель ГС')
                     end
                     imgui.SameLine()
                     if imgui.ClosePopupButton(u8'Команды##isdihishdihi', imgui.ImVec2(74,30)) then
                         lua_thread.create(function()
-                            sampSendChatMessage('/setstat '..playerId..' 36 1')
+                            sampSendChat('/setstat '..playerId..' 37 1')
                             wait(1000)
-                            sampSendChatMessage('/setstat '..playerId..' 37 1')
+                            sampSendChat('/setcmd '..nickname..' /makeleader 1')
                             wait(1000)
-                            sampSendChatMessage('/setcmd '..nickname..' /makeleader 1')
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                             wait(1000)
-                            sampSendChatMessage('/setcmd '..nickname..' /ghetto 1')
-                            wait(1000)
-                            sampSendChatMessage('/setcmd '..nickname..' /gzcolor 1')
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
                         end)
                     end
                     imgui.SameLine()
                     if imgui.ClosePopupButton(u8'Выдать всё##[pkopsjdojd', imgui.ImVec2(191,30)) then
                         lua_thread.create(function()
-                            sampSendChatMessage('/prefix '..playerId..' Ghetto | Заместитель ГС')
+                            sampSendChat('/prefix '..playerId..' Ghetto | Заместитель ГС')
                             wait(1000)
-                            sampSendChatMessage('/setstat '..playerId..' 36 1')
+                            sampSendChat('/setstat '..playerId..' 37 1')
                             wait(1000)
-                            sampSendChatMessage('/setstat '..playerId..' 37 1')
+                            sampSendChat('/setcmd '..nickname..' /makeleader 1')
                             wait(1000)
-                            sampSendChatMessage('/setcmd '..nickname..' /makeleader 1')
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                             wait(1000)
-                            sampSendChatMessage('/setcmd '..nickname..' /ghetto 1')
-                            wait(1000)
-                            sampSendChatMessage('/setcmd '..nickname..' /gzcolor 1')
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
                         end)
                     end
                     imgui.PushFont(font_16)
                     imgui.CenterText(u8'\nГлавный следящий')
                     imgui.PopFont()
                     if imgui.ClosePopupButton(u8'Префикс##sdwoksoo', imgui.ImVec2(74,30)) then
-                        sampSendChatMessage('/prefix '..playerId..' Ghetto | Главный Следящий')
+                        sampSendChat('/prefix '..playerId..' Ghetto | Главный Следящий')
                     end
                     imgui.SameLine()
                     if imgui.ClosePopupButton(u8'Команды##lpojsdjoijd', imgui.ImVec2(74,30)) then
                         lua_thread.create(function()
-                            sampSendChatMessage('/setstat '..playerId..' 36 1')
-                            wait(1000)
                             sampSendChat('/setstat '..playerId..' 37 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /makeleader 1')
@@ -1167,8 +1223,6 @@ function imgui.OnDrawFrame( ... )
                     if imgui.ClosePopupButton(u8'Выдать всё##ojaisniajd', imgui.ImVec2(108,30)) then
                         lua_thread.create(function()
                             sampSendChat('/prefix '..playerId..' Ghetto | Главный Следящий')
-                            wait(1000)
-                            sampSendChat('/setstat '..playerId..' 36 1')
                             wait(1000)
                             sampSendChat('/setstat '..playerId..' 37 1')
                             wait(1000)
@@ -1208,10 +1262,6 @@ function imgui.OnDrawFrame( ... )
                     imgui.SameLine()
                     if imgui.ClosePopupButton(u8'Команды##aofjoijiodjfio', imgui.ImVec2(74,30)) then
                         lua_thread.create(function()
-                            sampSendChat('/setstat '..playerId..' 36 1')
-                            wait(1000)
-                            sampSendChat('/setstat '..playerId..' 37 1')
-                            wait(1000)
                             sampSendChat('/setcmd '..nickname..' /makeleader 1')
                         end)
                     end
@@ -1219,10 +1269,6 @@ function imgui.OnDrawFrame( ... )
                     if imgui.ClosePopupButton(u8'Выдать всё##eidnafjiejd', imgui.ImVec2(191,30)) then
                         lua_thread.create(function()
                             sampSendChat('/prefix '..playerId..' Mafia | Заместитель ГС')
-                            wait(1000)
-                            sampSendChat('/setstat '..playerId..' 36 1')
-                            wait(1000)
-                            sampSendChat('/setstat '..playerId..' 37 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /makeleader 1')
                         end)
@@ -1238,8 +1284,6 @@ function imgui.OnDrawFrame( ... )
                         lua_thread.create(function()
                             sampSendChat('/setstat '..playerId..' 36 1')
                             wait(1000)
-                            sampSendChat('/setstat '..playerId..' 37 1')
-                            wait(1000)
                             sampSendChat('/setcmd '..nickname..' /makeleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
@@ -1253,8 +1297,6 @@ function imgui.OnDrawFrame( ... )
                     if imgui.ClosePopupButton(u8'Выдать всё##iahfihidahf', imgui.ImVec2(108,30)) then
                         lua_thread.create(function()
                             sampSendChat('/prefix '..playerId..' Mafia | Главный Следящий')
-                            wait(1000)
-                            sampSendChat('/setstat '..playerId..' 36 1')
                             wait(1000)
                             sampSendChat('/setstat '..playerId..' 37 1')
                             wait(1000)
@@ -1288,13 +1330,13 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                         end)
                     end
                     imgui.SameLine()
-                    if imgui.ClosePopupButton(u8'Выдать всё##apkdojokod', imgui.ImVec2(191,30)) then
+                    if imgui.ClosePopupButton(u8'Выдать всё##apkdojokod', imgui.ImVec2(181,30)) then
                         lua_thread.create(function()
                             sampSendChat('/prefix '..playerId..' Заместитель ГА')
                             wait(1000)
@@ -1304,7 +1346,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                         end)
@@ -1324,13 +1366,13 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                         end)
                     end
                     imgui.SameLine()
-                    if imgui.ClosePopupButton(u8'Выдать всё##akoodjoajodjad', imgui.ImVec2(191,30)) then
+                    if imgui.ClosePopupButton(u8'Выдать всё##akoodjoajodjad', imgui.ImVec2(181,30)) then
                         lua_thread.create(function()
                             sampSendChat('/prefix '..playerId..' Главный Администратор')
                             wait(1000)
@@ -1340,7 +1382,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                         end)
@@ -1360,13 +1402,13 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                         end)
                     end
                     imgui.SameLine()
-                    if imgui.ClosePopupButton(u8'Выдать всё##a[lpkpkpfkdf', imgui.ImVec2(191,30)) then
+                    if imgui.ClosePopupButton(u8'Выдать всё##a[lpkpkpfkdf', imgui.ImVec2(181,30)) then
                         lua_thread.create(function()
                             sampSendChat('/prefix '..playerId..' Руководитель Сервера')
                             wait(1000)
@@ -1376,7 +1418,71 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /banip 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /makehelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                        end)
+                    end
+                    imgui.PushFont(font_16)
+                    imgui.CenterText(u8'Заместитель Куратора')
+                    imgui.PopFont()
+                    if imgui.ClosePopupButton(u8'Префикс##pakpkdkpodk', imgui.ImVec2(74,30)) then
+                        sampSendChat('/prefix '..playerId..' Заместитель Куратора')
+                    end
+                    imgui.SameLine()
+                    if imgui.ClosePopupButton(u8'Команды##aojdjodfjo', imgui.ImVec2(74,30)) then
+                        lua_thread.create(function()
+                            sampSendChat('/setstat '..playerId..' 36 1')
+                            wait(1000)
+                            sampSendChat('/setstat '..playerId..' 37 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /avig 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /makeleader 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /offleader 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /banip 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /makehelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                        end)
+                    end
+                    imgui.SameLine()
+                    if imgui.ClosePopupButton(u8'Выдать всё##Sddddddd', imgui.ImVec2(181,30)) then
+                        lua_thread.create(function()
+                            sampSendChat('/prefix '..playerId..' Заместитель Куратора')
+                            wait(1000)
+                            sampSendChat('/setstat '..playerId..' 36 1')
+                            wait(1000)
+                            sampSendChat('/setstat '..playerId..' 37 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /avig 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /makeleader 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /offleader 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /makehelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                         end)
@@ -1396,7 +1502,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /makeleader 1')
                             wait(1000)
@@ -1407,10 +1513,14 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /ghetto 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /makehelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /offhelper 1')
                         end)
                     end
                     imgui.SameLine()
-                    if imgui.ClosePopupButton(u8'Выдать всё', imgui.ImVec2(191,30)) then
+                    if imgui.ClosePopupButton(u8'Выдать всё', imgui.ImVec2(181,30)) then
                         lua_thread.create(function()
                             sampSendChat('/prefix '..playerId..' Куратор Сервера')
                             wait(1000)
@@ -1420,11 +1530,15 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /makeleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /makehelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /offhelper 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /gzcolor 1')
                             wait(1000)
@@ -1458,7 +1572,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1471,6 +1585,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.SameLine()
@@ -1484,7 +1602,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1497,6 +1615,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.PushFont(font_16)
@@ -1514,7 +1636,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1527,6 +1649,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.SameLine()
@@ -1540,7 +1666,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1553,6 +1679,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.PushFont(font_16)
@@ -1570,7 +1700,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1583,6 +1713,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.SameLine()
@@ -1596,7 +1730,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1609,6 +1743,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.PushFont(font_16)
@@ -1626,7 +1764,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1639,6 +1777,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.SameLine()
@@ -1652,7 +1794,7 @@ function imgui.OnDrawFrame( ... )
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /avig 1')
                             wait(1000)
-                            sampSendChat('/setcmd '..nickname..' /auvig 1')
+                            sampSendChat('/setcmd '..nickname..' /aunvig 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /banip 1')
                             wait(1000)
@@ -1665,6 +1807,10 @@ function imgui.OnDrawFrame( ... )
                             sampSendChat('/setcmd '..nickname..' /offleader 1')
                             wait(1000)
                             sampSendChat('/setcmd '..nickname..' /offhelper 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /gzcolor 1')
+                            wait(1000)
+                            sampSendChat('/setcmd '..nickname..' /ghetto 1')
                         end)
                     end
                     imgui.PopStyleColor(1)
@@ -1718,24 +1864,98 @@ function imgui.OnDrawFrame( ... )
                 end
         imgui.End()
     end
-    if updates.v then
-	    imgui.SetNextWindowSize(imgui.ImVec2(0,0), imgui.Cond.FirstUseEver)
+    if astats_menu.v then
+	    imgui.SetNextWindowSize(imgui.ImVec2(399,279), imgui.Cond.FirstUseEver)
 	    imgui.SetNextWindowPos(imgui.ImVec2((sw / 2), sh / 2), imgui.Cond.FirstUseEver, imgui.ImVec2(0.5, 0.5))
-        imgui.Begin(u8'udatess', updates, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.ShowBorders + imgui.WindowFlags.AlwaysUseWindowPadding)
-        imgui.PushFont(fontsize35)
-        imgui.TextColoredRGB(u8'{D6D6D6}Версия: '..thisScript().version)
+        imgui.Begin(u8'##astats', astats_menu, imgui.WindowFlags.NoResize + imgui.WindowFlags.NoCollapse + imgui.WindowFlags.NoMove + imgui.WindowFlags.NoTitleBar + imgui.WindowFlags.ShowBorders + imgui.WindowFlags.AlwaysUseWindowPadding)
+        imgui.PushFont(font_16)
+        imgui.CenterText(u8'Статистика игрока')
         imgui.PopFont()
-        imgui.Text('')
-        imgui.Text(u8'Исправление ошибок и добавлены новые')
-        imgui.Text(u8'Добавлено автообновление')
-        imgui.Text(u8'Добавлена команда /givecmd - выдать себе все команды')
-        if imgui.ClosePopupButton(u8'Закрыть', imgui.ImVec2(450,30)) then
-            updates.v = false
+        imgui.SameLine()
+        imgui.SetCursorPosY(10)
+        imgui.SetCursorPosX(358)
+        imgui.PushFont(fa_font2)
+        if imgui.CloseButton(fa.ICON_FA_TIMES, imgui.ImVec2(30,30)) then
+            astats_menu.v = false
+        end
+        imgui.PopFont()
+        if astats == 0 or astats == nil then
+            imgui.SetCursorPosY(100)
+            imgui.SetCursorPosX(176)
+            imgui.Spinner("##spinner", 25, 3, imgui.GetColorU32(imgui.GetStyle().Colors[imgui.Col.TitleBg]))
+            imgui.Text('')
+            if timerStart and timerEndTime then
+                local timerEndTimeSec = timerEndTime * 1
+                local showtime = timerEndTimeSec - (os.time() - timerStart)
+                if showtime > 0 then
+                    imgui.CenterText(u8'Идёт поиск игрока: '..FormatTime(showtime)) 
+                else
+                    astats = 1
+                end
+            end
+        end
+        if astats == 1 then
+            imgui.Text(u8'Игрок: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(a_nick)
+            imgui.Text(u8'Уровень администратора: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_level)
+            imgui.Text(u8'Организация: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(u8(afr[tonumber(frac)])..' '..u8(leas[tonumber(leader)]))
+            imgui.Text(u8'Последний вход: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(lc_d..' '..u8(god[tonumber(lc_m)])..' '..lc_y..u8' в '..lc_h..u8':'..lc_min)
+            imgui.Text(u8'Онлайн: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_onl_seg1..u8' часов, '..adm_onl_seg2..u8' минут')
+            imgui.Text('')
+            imgui.Text(u8'Ответы на репорты: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_rep)
+            imgui.SameLine(200)
+            imgui.Text(u8'Кикнуто: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_kick..u8' человек')
+            imgui.Text(u8'Заварнено: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_warn..u8' человек')
+            imgui.SameLine(200)
+            imgui.Text(u8'Забанено: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_ban..u8' человек')
+            imgui.Text(u8'Посажено: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_jail..u8' человек')
+            imgui.SameLine(200)
+            imgui.Text(u8'Замучено: ')
+            imgui.SameLine()
+            imgui.BlackGrayText(adm_mute..u8' человек')
+            imgui.SetCursorPosY(236)
+            if imgui.TransButton(u8'Выдать выговор', imgui.ImVec2(120, 30)) then
+                sampAddChatMessage(tag..'{FFFFFF}Мы понимаем, что Вы ждёте данную функцию, но пока она не работает!', main_color)
+            end
+            imgui.SameLine()
+            if imgui.TransButton(u8'Выдать админку', imgui.ImVec2(120, 30)) then
+                sampAddChatMessage(tag..'{FFFFFF}Мы понимаем, что Вы ждёте данную функцию, но пока она не работает!', main_color)
+            end
+        end
+        if astats == 2 then
+            imgui.CenterXYText(u8'Такой игрок не зарегистрирован на сервере!')
         end
         imgui.End()
     end
 end
 
+function imgui.CenterXYText(text)
+    local width = imgui.GetWindowWidth()
+	local height = imgui.GetWindowHeight()
+    local calc = imgui.CalcTextSize(text)
+    imgui.SetCursorPosX( width / 2 - calc.x / 2 )
+	imgui.SetCursorPosY( height / 2 - calc.y / 2 )
+    imgui.Text(text)
+end
 
 function imgui.ClosePopupButton(text, size)
 	imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.156, 0.156, 0.156, 0.650))
@@ -1776,6 +1996,16 @@ end
 function imgui.CloseButton(text, size)
 	imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.45, 0.06, 0.06, 0.00))
 	imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.75, 0.15, 0.15, 0.00))
+	imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(0.35, 0.03, 0.03, 0.00))
+    imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(0.06, 0.05, 0.07, 0.00))
+    imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 1, 1, 0.50))
+		local button = imgui.Button(text, size)
+	imgui.PopStyleColor(5)
+	return button
+end
+function imgui.TransButton(text, size)
+	imgui.PushStyleColor(imgui.Col.Button, imgui.ImVec4(0.45, 0.06, 0.06, 0.00))
+	imgui.PushStyleColor(imgui.Col.ButtonHovered, imgui.ImVec4(0.142, 0.142, 0.142, 0.254))
 	imgui.PushStyleColor(imgui.Col.ButtonActive, imgui.ImVec4(0.35, 0.03, 0.03, 0.00))
     imgui.PushStyleColor(imgui.Col.Border, imgui.ImVec4(0.06, 0.05, 0.07, 0.00))
     imgui.PushStyleColor(imgui.Col.Text, imgui.ImVec4(1, 1, 1, 0.50))
@@ -2010,7 +2240,32 @@ function imgui.CircleButton(str_id, bool, color4, radius, isimage)
 	imgui.SetCursorPosY(imgui.GetCursorPosY()+radius)
 	return rBool
 end
+function imgui.Spinner(label, radius, thickness, color)
+    local style = imgui.GetStyle()
+    local pos = imgui.GetCursorScreenPos()
+    local size = imgui.ImVec2(radius * 2, (radius + style.FramePadding.y) * 2)
+    
+    imgui.Dummy(imgui.ImVec2(size.x + style.ItemSpacing.x, size.y))
 
+    local DrawList = imgui.GetWindowDrawList()
+    DrawList:PathClear()
+    
+    local num_segments = 30
+    local start = math.abs(math.sin(imgui.GetTime() * 1.8) * (num_segments - 5))
+    
+    local a_min = 3.14 * 2.0 * start / num_segments
+    local a_max = 3.14 * 2.0 * (num_segments - 3) / num_segments
+
+    local centre = imgui.ImVec2(pos.x + radius, pos.y + radius + style.FramePadding.y)
+    
+    for i = 0, num_segments do
+        local a = a_min + (i / num_segments) * (a_max - a_min)
+        DrawList:PathLineTo(imgui.ImVec2(centre.x + math.cos(a + imgui.GetTime() * 8) * radius, centre.y + math.sin(a + imgui.GetTime() * 8) * radius))
+    end
+
+    DrawList:PathStroke(color, false, thickness)
+    return true
+end
 function imgui.ToggleButton(str_id, bool)
 	local rBool = false
 
@@ -2154,9 +2409,9 @@ function style()
 
     if ini.config.theme == 1 or ini.config.theme == nil then
         colors[clr.Text] = ImVec4(1.00, 1.00, 1.00, 1.00)
-        colors[clr.TextDisabled] = ImVec4(1.815, 1.388, 1.051, 0.000)
+        colors[clr.TextDisabled] = ImVec4(1.815, 1.388, 1.051, 0.500)
         colors[clr.WindowBg] = ImVec4(0.06, 0.05, 0.07, 0.93)
-        colors[clr.ChildWindowBg] = ImVec4(0.07, 0.07, 0.09, 1.00)
+        colors[clr.ChildWindowBg] = ImVec4(0.07, 0.07, 0.09, 0.00)
         colors[clr.PopupBg] = ImVec4(0.07, 0.07, 0.09, 1.00)
         colors[clr.Border] = ImVec4(0.80, 0.80, 0.83, 0.38)
         colors[clr.BorderShadow] = ImVec4(0.92, 0.91, 0.88, 0.00)
@@ -2382,7 +2637,7 @@ function autoupdate(json_url, prefix, url)
                 lua_thread.create(function(prefix)
                   local dlstatus = require('moonloader').download_status
                   local color = -1
-                  sampAddChatMessage((prefix..'Обнаружено обновление. Пытаюсь обновиться c '..thisScript().version..' на '..updateversion), color)
+                  sampAddChatMessage((tag..'{FFFFFF}Обновляюсь на новую версию: '..updateversion), main_color)
                   wait(250)
                   downloadUrlToFile(updatelink, thisScript().path,
                     function(id3, status1, p13, p23)
@@ -2390,14 +2645,14 @@ function autoupdate(json_url, prefix, url)
                         print(string.format('Загружено %d из %d.', p13, p23))
                       elseif status1 == dlstatus.STATUS_ENDDOWNLOADDATA then
                         print('Загрузка обновления завершена.')
-                        sampAddChatMessage((prefix..'Обновление завершено!'), color)
+                        sampAddChatMessage((tag..'{FFFFFF}Обновление завершено!'), main_color)
                         updates.v = true
                         goupdatestatus = true
                         lua_thread.create(function() wait(500) thisScript():reload() end)
                       end
                       if status1 == dlstatus.STATUSEX_ENDDOWNLOAD then
                         if goupdatestatus == nil then
-                          sampAddChatMessage((prefix..'Обновление прошло неудачно. Запускаю устаревшую версию..'), color)
+                          sampAddChatMessage((tag..'{FFFFFF}Обновление прошло неудачно. Запускаю устаревшую версию.'), main_color)
                           update = false
                         end
                       end
